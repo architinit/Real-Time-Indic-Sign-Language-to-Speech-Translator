@@ -23,16 +23,26 @@ The system works entirely through a **standard webcam** — no special hardware 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontSize': '11px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 graph TD
-    A(["🤟 ISL Signer"]) -->|live webcam| B["📷 Webcam Capture<br/>(OpenCV · 30 fps)"]
-    B -->|raw frames| C["🦴 MediaPipe Holistic<br/>Landmark Extraction"]
-    C -->|132 values| D1["Pose · 33 joints"]
-    C -->|120 values| D2["Face · 40 keypoints"]
-    C -->|126 values| D3["Hands · 21+21 joints"]
-    D1 & D2 & D3 -->|378 dims / frame| E["🔢 Feature Vector<br/>30 frames × 378 features"]
-    E -->|sequence| F["🧠 Bidirectional LSTM<br/>BiLSTM → Dropout → BiLSTM → Dense<br/>50-class softmax"]
-    F -->|predictions| G["🗳️ Vote Confirmation<br/>4 of 6 frames"]
-    G -->|confirmed word| H["✍️ Groq LLaMA 3.1<br/>ISL gloss → natural sentence"]
-    H -->|final sentence| I(["🔊 gTTS · EN · HI · BN · TA · TE · MR · GU"])
+    A(["🤟 ISL Signer"]):::signer -->|live webcam| B["📷 Webcam Capture<br/>(OpenCV · 30 fps)"]:::capture
+    B -->|raw frames| C["🦴 MediaPipe Holistic<br/>Landmark Extraction"]:::mediapipe
+    C -->|132 values| D1["Pose · 33 joints"]:::branch
+    C -->|120 values| D2["Face · 40 keypoints"]:::branch
+    C -->|126 values| D3["Hands · 21+21 joints"]:::branch
+    D1 & D2 & D3 -->|378 dims / frame| E["🔢 Feature Vector<br/>30 frames × 378 features"]:::feature
+    E -->|sequence| F["🧠 Bidirectional LSTM<br/>BiLSTM → Dropout → BiLSTM → Dense<br/>50-class softmax"]:::model
+    F -->|predictions| G["🗳️ Vote Confirmation<br/>4 of 6 frames"]:::vote
+    G -->|confirmed word| H["✍️ Groq LLaMA 3.1<br/>ISL gloss → natural sentence"]:::llm
+    H -->|final sentence| I(["🔊 gTTS · EN · HI · BN · TA · TE · MR · GU"]):::speech
+
+    classDef signer   fill:#FF9933,stroke:#cc7000,color:#fff,font-weight:bold
+    classDef capture  fill:#FFF3E0,stroke:#FF9933,color:#7a3a00
+    classDef mediapipe fill:#E3F2FD,stroke:#1565C0,color:#0D3B66
+    classDef branch   fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef feature  fill:#FFF9C4,stroke:#F9A825,color:#5a4000
+    classDef model    fill:#1a1a6e,stroke:#000080,color:#ffffff,font-weight:bold
+    classDef vote     fill:#EDE7F6,stroke:#6A1B9A,color:#3b0764
+    classDef llm      fill:#FCE4EC,stroke:#C62828,color:#7b0000
+    classDef speech   fill:#138808,stroke:#0a5a05,color:#ffffff,font-weight:bold
 ```
 
 ---
