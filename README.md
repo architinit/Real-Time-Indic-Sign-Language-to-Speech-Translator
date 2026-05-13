@@ -1,6 +1,6 @@
 # 🤟 Real Time Indic Sign Language to Speech Translator
 
-> A B.Tech Final Year Project that translates **Indian Sign Language (ISL)** gestures into spoken sentences in **7 Indian languages** — in real time, using just a webcam.
+> A B.Tech Final Year Project that bridges the communication gap for the **Deaf and Hard-of-Hearing community** by translating **Indian Sign Language (ISL)** gestures into spoken sentences — in real time, across **7 Indian languages**, using just a webcam.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16-orange?logo=tensorflow)
@@ -10,56 +10,129 @@
 
 ---
 
-## 🌟 What It Does
+## 🌟 Overview
 
-The system captures live webcam video, extracts body, hand, and face landmarks using **MediaPipe Holistic**, and feeds 30-frame sequences into a **Bidirectional LSTM** model to classify Indian Sign Language gestures. Recognised signs are assembled into a sentence, refined by **Groq LLaMA** for grammar, and spoken aloud via **gTTS** in the user's chosen language.
+Indian Sign Language is the primary mode of communication for millions of Deaf and Hard-of-Hearing individuals across India, yet very few real-time tools exist to bridge the gap between ISL users and non-signers. This project addresses that gap.
+
+The system works entirely through a **standard webcam** — no special hardware required. It captures live video, extracts skeletal and facial landmarks frame by frame using **MediaPipe Holistic**, and passes 30-frame sequences into a **Bidirectional LSTM** deep learning model to classify which ISL sign is being performed. Confirmed signs are assembled into a sentence, which is then grammatically refined using **Groq LLaMA 3.1** and spoken aloud via **Google Text-to-Speech** in the user's chosen Indian language.
+
+---
+
+## 🔄 System Architecture & Pipeline
 
 ```
-Webcam → MediaPipe Landmarks → BiLSTM → Vote Confirmation → LLM Grammar → gTTS Speech
+┌─────────────────────────────────────────────────────────────────────┐
+│                        USER (ISL Signer)                            │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  performs sign gesture
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        WEBCAM (OpenCV)                              │
+│              Captures 30fps live video frames                       │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  raw BGR frames
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   MEDIAPIPE HOLISTIC                                │
+│                                                                     │
+│   ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐  │
+│   │  Pose (132) │  │  Face (120) │  │  Left Hand + Right Hand  │  │
+│   │  33 joints  │  │  40 key pts │  │       (63 + 63 = 126)    │  │
+│   └──────┬──────┘  └──────┬──────┘  └────────────┬─────────────┘  │
+│          └────────────────┴──────────────────────┘                 │
+│                           │  concatenated                          │
+│                           ▼                                        │
+│              378-dimensional feature vector / frame                │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  30 frames buffered (≈1 second)
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  BIDIRECTIONAL LSTM MODEL                           │
+│                                                                     │
+│   Input  →  (30 frames × 378 features)                             │
+│          →  BiLSTM(128, return_sequences=True)                      │
+│          →  Dropout(0.3)                                            │
+│          →  BiLSTM(64)                                              │
+│          →  Dense(64, relu)                                         │
+│          →  Dense(50, softmax)                                      │
+│          →  50-class probability distribution                       │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  top predicted class + confidence
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   VOTE-BASED CONFIRMATION                           │
+│                                                                     │
+│   Rolling window of 6 predictions                                  │
+│   Word confirmed only when same class appears ≥ 4 times            │
+│   Eliminates flickering during hand transitions                     │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  confirmed word added to sentence
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                 GROQ LLAMA 3.1 GRAMMAR CORRECTION                  │
+│                                                                     │
+│   Raw ISL gloss:  "I Doctor Hospital"                              │
+│   Natural output: "I am a Doctor in the Hospital."                 │
+│   Fallback:       Rule-based linking verb injection                 │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │  grammatically correct English sentence
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  gTTS MULTILINGUAL SPEECH OUTPUT                    │
+│                                                                     │
+│   Translates sentence → chosen Indian language                     │
+│   Speaks aloud via Google Text-to-Speech + pygame                  │
+│   Supported: EN · HI · BN · TA · TE · MR · GU                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-- 🎯 **50 ISL word classes** — pronouns, family, professions, emotions, places, greetings, and more
-- 🗣 **7 Indian languages** — English, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati
-- ⚡ **Real-time recognition** — MediaPipe Holistic at up to 30 fps, server-side
-- 🧠 **BiLSTM deep learning** — trained on personal ISL recordings with augmentation
-- 🗳 **Vote-based stability** — majority vote over 6 frames before confirming a word
-- ✍️ **AI grammar correction** — Groq LLaMA 3.1 converts ISL gloss into natural sentences
-- 🌐 **Browser UI** — full web interface served by Flask, no plugins needed
+| Feature | Description |
+|---|---|
+| 🎯 **50 ISL Word Classes** | Pronouns, family, professions, emotions, places, greetings, time |
+| 🗣 **7 Indian Languages** | English, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati |
+| ⚡ **Real-Time Recognition** | Server-side MediaPipe Holistic at up to 30 fps |
+| 🧠 **Bidirectional LSTM** | Captures both forward and backward gesture motion |
+| 🗳 **Vote-Based Stability** | 4/6 frame agreement required before confirming a word |
+| ✍️ **AI Grammar Correction** | Groq LLaMA 3.1 converts ISL gloss into natural sentences |
+| 🔄 **Rule-Based Fallback** | Works fully offline if Groq API is unavailable |
+| 🌐 **Browser UI** | Live MJPEG camera stream, no plugins needed |
+| 🔊 **Multilingual TTS** | Speaks final sentence in the user's chosen language |
 
 ---
 
 ## 🗂️ Project Structure
 
 ```
-Major_Project_ISL/
-├── app.py                          # Flask backend — camera, inference, MJPEG stream
-├── requirements.txt
+Real-Time-Indic-Sign-Language-to-Speech-Translator/
+├── app.py                          # Flask backend — camera loop, inference, MJPEG stream
+├── requirements.txt                # Python dependencies
+├── .env.example                    # Environment variable template
 ├── Frontend/
-│   ├── index.html                  # Web UI
-│   ├── styles.css
-│   └── app.js
+│   ├── index.html                  # Main web UI (tricolor themed, India skyline)
+│   ├── styles.css                  # Indian flag color palette styling
+│   └── app.js                      # Camera control, status polling, UI updates
 ├── scripts/
-│   ├── sentence_builder.py         # Standalone desktop ISL sentence builder
+│   ├── sentence_builder.py         # Standalone OpenCV desktop sentence builder
 │   ├── word_tester.py              # Test all 50 signs with reference video panel
-│   ├── personal_collector.py       # Record your own ISL training data
-│   ├── data_collection.py          # Landmark extraction from raw videos
+│   ├── personal_collector.py       # Record your own ISL training data via webcam
+│   ├── data_collection.py          # Extract landmarks from raw dataset videos
 │   ├── video_processor.py          # Video preprocessing utilities
-│   ├── model_training.py           # Train the BiLSTM model
-│   ├── train_personal_only.py      # Train on personal recordings only
-│   ├── augment_personal_data.py    # Data augmentation
-│   ├── fine_tune.py                # Fine-tune on personal data
-│   └── evaluation_report.py       # Model evaluation
+│   ├── model_training.py           # Train BiLSTM on INCLUDE dataset features
+│   ├── train_personal_only.py      # Train BiLSTM on personal recordings only
+│   ├── augment_personal_data.py    # Augment recordings with noise/scaling
+│   ├── fine_tune.py                # Fine-tune INCLUDE model on personal data
+│   └── evaluation_report.py       # Per-class accuracy evaluation
 ├── models/
-│   └── isl_model_solo.keras        # Trained BiLSTM model (active)
+│   └── isl_model_solo.keras        # Active trained BiLSTM model (9.4 MB)
 ├── mediapipe_models/
-│   ├── holistic_landmarker.task    # MediaPipe Holistic model
-│   └── *.tflite                    # Component models
+│   ├── holistic_landmarker.task    # MediaPipe Holistic landmark model
+│   └── *.tflite                    # Individual component models
 ├── data/
-│   └── extracted_features/         # Label folders (50 word classes)
+│   └── extracted_features/         # 50 label folders (class names)
 └── reports/
     └── ISL_Dataset_Exploration_Report.pdf
 ```
@@ -71,14 +144,14 @@ Major_Project_ISL/
 ### Prerequisites
 
 - Python 3.12
-- A webcam
+- A working webcam
 - Windows / macOS / Linux
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/real-time-indic-sign-language-to-speech-translator.git
-cd real-time-indic-sign-language-to-speech-translator
+git clone https://github.com/architinit/Real-Time-Indic-Sign-Language-to-Speech-Translator.git
+cd Real-Time-Indic-Sign-Language-to-Speech-Translator
 ```
 
 ### 2. Create a virtual environment
@@ -99,27 +172,43 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 4. Set up your Groq API key
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in your key:
+```
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+Get a free key at [console.groq.com](https://console.groq.com). The app works without it (falls back to rule-based grammar) but LLM correction gives better output.
+
 ---
 
 ## 🚀 Running the Project
 
 ### Option A — Web App (Recommended)
 
-Runs the full browser-based interface with a live camera feed.
-
 ```bash
 python app.py
 ```
 
-Open **`http://localhost:5000`** in your browser, then click **Start Camera** to begin signing.
+Open **`http://localhost:5000`** in Chrome or Firefox.
 
-- Detected sign appears live in the right panel
-- Words accumulate into a sentence automatically
-- Click **Confirm** to finalise and **Speak** to hear it in your chosen language
+1. Click **Start Camera** — webcam activates server-side
+2. Perform an ISL sign in front of the camera
+3. The detected word appears live in the **Detected Sign** panel
+4. Words accumulate in the **Building Sentence** panel
+5. Wait 2.5 seconds (auto-finalise) or click **Confirm**
+6. Click **Speak** to hear it in your chosen language
+
+> On the same WiFi network, other devices can access the app at `http://<your-local-IP>:5000`
 
 ### Option B — Desktop Script
 
-A standalone OpenCV window with the same recognition pipeline.
+A standalone OpenCV window — same pipeline, no browser needed.
 
 ```bash
 python scripts/sentence_builder.py
@@ -130,7 +219,7 @@ python scripts/sentence_builder.py
 | `ENTER` | Finalise sentence and speak |
 | `B` | Undo last word |
 | `C` | Clear sentence |
-| `1–7` | Switch output language (En/Hi/Bn/Ta/Te/Mr/Gu) |
+| `1–7` | Switch language (En/Hi/Bn/Ta/Te/Mr/Gu) |
 | `Q` | Quit |
 
 ### Option C — Word Tester
@@ -141,41 +230,30 @@ Test all 50 signs one by one with a reference video side-by-side.
 python scripts/word_tester.py
 ```
 
----
-
-## 🔑 API Key (Groq)
-
-The project uses **Groq LLaMA** for AI grammar correction.
-
-1. Get a free key at [console.groq.com](https://console.groq.com)
-2. Replace `GROQ_API_KEY` in `app.py` and `scripts/sentence_builder.py`
-
-> If Groq is unavailable the system automatically falls back to a rule-based grammar engine — the app still works fully.
+| Key | Action |
+|---|---|
+| `SPACE` | Mark sign as passed, move to next |
+| `F` | Flag sign as failing, move to next |
+| `Q` | Quit and print summary of flagged signs |
 
 ---
 
-## 🧠 Model & Training
+## 🧠 Training Your Own Model
 
-The active model (`models/isl_model_solo.keras`) is a **Bidirectional LSTM** trained on personal ISL recordings of 50 word classes.
-
-**Architecture:**
-- Input: `(30 frames × 378 features)` — pose + face keypoints + both hand landmarks
-- BiLSTM → Dropout → BiLSTM → Dense → Softmax (50 classes)
-
-**To train your own model on your own recordings:**
+The pre-trained model (`models/isl_model_solo.keras`) was trained on the project team's personal ISL recordings. Since sign language recognition is **signer-dependent** (hand size, signing style, and camera angle all affect accuracy), training on your own recordings will give better results.
 
 ```bash
-# 1. Record your own ISL signs
+# Step 1 — Record 30 sequences per word via webcam
 python scripts/personal_collector.py
 
-# 2. Augment the recorded data
+# Step 2 — Augment to expand the dataset
 python scripts/augment_personal_data.py
 
-# 3. Train the BiLSTM
+# Step 3 — Train the BiLSTM
 python scripts/train_personal_only.py
 ```
 
-> **Note:** The pre-trained model was trained on the signer's own recordings. For best accuracy, training on your own hand gestures is recommended.
+The new model is saved automatically to `models/isl_model_solo.keras`.
 
 ---
 
@@ -183,15 +261,25 @@ python scripts/train_personal_only.py
 
 | Category | Signs |
 |---|---|
-| Pronouns | I, You, He, She, They, We, It |
-| Family | Mother, Father, Brother, Sister, Family, Friend |
-| Professions | Teacher, Doctor, Police, Student, Man, Woman, Patient |
-| Emotions | Happy, Sad, Good, Bad, Strong, Weak, Healthy, Sick, Alive |
-| Age | Old, Young, Deaf |
-| Greetings | Hello, How are you, Thank you, Good Morning |
-| Places | House, Hospital, School |
-| Time | Today, Tomorrow, Yesterday, Morning, Night, Time |
-| Others | Exercise, Sign, Dream, Sport, Medicine |
+| **Pronouns** | I, You, He, She, They, We, It |
+| **Family** | Mother, Father, Brother, Sister, Family, Friend |
+| **Professions** | Teacher, Doctor, Police, Student, Man, Woman, Patient |
+| **Emotions** | Happy, Sad, Good, Bad, Strong, Weak, Healthy, Sick, Alive |
+| **Age** | Old, Young, Deaf |
+| **Greetings** | Hello, How are you, Thank you, Good Morning |
+| **Places** | House, Hospital, School |
+| **Time** | Today, Tomorrow, Yesterday, Morning, Night, Time |
+| **Others** | Exercise, Sign, Dream, Sport, Medicine |
+
+---
+
+## 📦 Dataset
+
+This project uses the **INCLUDE** dataset — a large-scale Indian Sign Language dataset containing 4,292 short video clips across 263 word signs in 15 categories, recorded by experienced ISL practitioners.
+
+- 📥 Download: [Zenodo — INCLUDE Dataset](https://zenodo.org/record/4010759)
+- The raw dataset is **not included** in this repository (55 GB)
+- Only the `extracted_features/` folder structure (label names) is tracked on GitHub
 
 ---
 
@@ -210,10 +298,11 @@ python scripts/train_personal_only.py
 
 ## 🙏 Acknowledgements
 
-- [INCLUDE Dataset](https://zenodo.org/record/4010759) — Indian Sign Language dataset (Zenodo)
+- [INCLUDE Dataset](https://zenodo.org/record/4010759) — Indian Sign Language dataset by IIT Bombay
 - [MediaPipe](https://mediapipe.dev) — Holistic landmark extraction by Google
-- [Groq](https://groq.com) — LLaMA 3.1 inference for grammar correction
-- [gTTS](https://gtts.readthedocs.io) — Google Text-to-Speech for multilingual output
+- [Groq](https://groq.com) — LLaMA 3.1 ultra-fast inference for grammar correction
+- [gTTS](https://gtts.readthedocs.io) — Google Text-to-Speech multilingual audio
+- [TensorFlow / Keras](https://tensorflow.org) — Deep learning framework
 
 ---
 
