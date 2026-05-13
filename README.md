@@ -1,6 +1,6 @@
 # 🤟 Real Time Indic Sign Language to Speech Translator
 
-> A B.Tech Final Year Project that bridges the communication gap for the **Deaf and Hard-of-Hearing community** by translating **Indian Sign Language (ISL)** gestures into spoken sentences — in real time, across **7 Indian languages**, using just a webcam.
+> Bridging the communication gap for the **Deaf and Hard-of-Hearing community** by translating **Indian Sign Language (ISL)** gestures into spoken sentences — in real time, across **7 Indian languages**, using just a webcam.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16-orange?logo=tensorflow)
@@ -21,69 +21,70 @@ The system works entirely through a **standard webcam** — no special hardware 
 ## 🔄 System Architecture & Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        USER (ISL Signer)                            │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  performs sign gesture
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        WEBCAM (OpenCV)                              │
-│              Captures 30fps live video frames                       │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  raw BGR frames
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   MEDIAPIPE HOLISTIC                                │
-│                                                                     │
-│   ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐  │
-│   │  Pose (132) │  │  Face (120) │  │  Left Hand + Right Hand  │  │
-│   │  33 joints  │  │  40 key pts │  │       (63 + 63 = 126)    │  │
-│   └──────┬──────┘  └──────┬──────┘  └────────────┬─────────────┘  │
-│          └────────────────┴──────────────────────┘                 │
-│                           │  concatenated                          │
-│                           ▼                                        │
-│              378-dimensional feature vector / frame                │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  30 frames buffered (≈1 second)
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                  BIDIRECTIONAL LSTM MODEL                           │
-│                                                                     │
-│   Input  →  (30 frames × 378 features)                             │
-│          →  BiLSTM(128, return_sequences=True)                      │
-│          →  Dropout(0.3)                                            │
-│          →  BiLSTM(64)                                              │
-│          →  Dense(64, relu)                                         │
-│          →  Dense(50, softmax)                                      │
-│          →  50-class probability distribution                       │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  top predicted class + confidence
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   VOTE-BASED CONFIRMATION                           │
-│                                                                     │
-│   Rolling window of 6 predictions                                  │
-│   Word confirmed only when same class appears ≥ 4 times            │
-│   Eliminates flickering during hand transitions                     │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  confirmed word added to sentence
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                 GROQ LLAMA 3.1 GRAMMAR CORRECTION                  │
-│                                                                     │
-│   Raw ISL gloss:  "I Doctor Hospital"                              │
-│   Natural output: "I am a Doctor in the Hospital."                 │
-│   Fallback:       Rule-based linking verb injection                 │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │  grammatically correct English sentence
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                  gTTS MULTILINGUAL SPEECH OUTPUT                    │
-│                                                                     │
-│   Translates sentence → chosen Indian language                     │
-│   Speaks aloud via Google Text-to-Speech + pygame                  │
-│   Supported: EN · HI · BN · TA · TE · MR · GU                     │
-└─────────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                      USER  (ISL Signer)                          |
++------------------------------------------------------------------+
+                              |
+                              |  performs sign gesture
+                              v
++------------------------------------------------------------------+
+|                      WEBCAM  (OpenCV)                            |
+|              Captures live video at up to 30 fps                 |
++------------------------------------------------------------------+
+                              |
+                              |  raw video frames
+                              v
++------------------------------------------------------------------+
+|                    MEDIAPIPE HOLISTIC                            |
+|                                                                  |
+|   [ Pose: 33 joints ]  [ Face: 40 keypoints ]  [ 2x Hands ]    |
+|       132 values            120 values         63 + 63 values   |
+|                                                                  |
+|            concatenated  =>  378 features / frame               |
++------------------------------------------------------------------+
+                              |
+                              |  30-frame buffer (~1 second)
+                              v
++------------------------------------------------------------------+
+|                  BIDIRECTIONAL LSTM MODEL                        |
+|                                                                  |
+|   Input  : (30 frames x 378 features)                           |
+|   Layer 1: BiLSTM(128, return_sequences=True)                   |
+|   Layer 2: Dropout(0.3)                                         |
+|   Layer 3: BiLSTM(64)                                           |
+|   Layer 4: Dense(64, relu)                                      |
+|   Output : Dense(50, softmax)  =>  50-class probabilities       |
++------------------------------------------------------------------+
+                              |
+                              |  top predicted class + confidence
+                              v
++------------------------------------------------------------------+
+|                   VOTE-BASED CONFIRMATION                        |
+|                                                                  |
+|   Sliding window of 6 predictions                               |
+|   Word confirmed only when same class appears >= 4 times        |
+|   Eliminates false positives during hand transitions            |
++------------------------------------------------------------------+
+                              |
+                              |  confirmed word added to sentence
+                              v
++------------------------------------------------------------------+
+|                GROQ LLaMA 3.1 - GRAMMAR CORRECTION              |
+|                                                                  |
+|   ISL gloss :  "I Doctor Hospital"                              |
+|   Output    :  "I am a Doctor in the Hospital."                 |
+|   Fallback  :  Rule-based linking verb engine (offline)         |
++------------------------------------------------------------------+
+                              |
+                              |  grammatically correct sentence
+                              v
++------------------------------------------------------------------+
+|                 gTTS  MULTILINGUAL SPEECH OUTPUT                 |
+|                                                                  |
+|   Translates to chosen language via Google Translate            |
+|   Speaks aloud via gTTS + pygame                                |
+|   Languages: EN  HI  BN  TA  TE  MR  GU                        |
++------------------------------------------------------------------+
 ```
 
 ---
@@ -283,18 +284,6 @@ This project uses the **INCLUDE** dataset — a large-scale Indian Sign Language
 
 ---
 
-## 👥 Team
-
-**B.Tech Final Year Project — Computer Science & Engineering**
-
-| Name |
-|---|
-| Archit Bali |
-| Namyaa Sarin |
-| Kartik Singh |
-| Ansh Patyal |
-
----
 
 ## 🙏 Acknowledgements
 
