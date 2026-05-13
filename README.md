@@ -21,17 +21,13 @@ The system works entirely through a **standard webcam** — no special hardware 
 ## 🔄 System Architecture & Pipeline
 
 ```mermaid
-graph LR
-    A(["🤟 ISL Signer"]) -->|Live webcam feed| B["📷 Webcam Capture<br/>(OpenCV · 30 fps)"]
-    B -->|Raw frames| C["🦴 MediaPipe Holistic<br/>Landmark Extraction"]
-    C -->|132 values| D1["Pose<br/>33 joints"]
-    C -->|120 values| D2["Face<br/>40 keypoints"]
-    C -->|126 values| D3["Both Hands<br/>21 + 21 joints"]
-    D1 & D2 & D3 -->|378-dim vector / frame| E["🔢 Feature Vector<br/>30 frames × 378 features"]
-    E -->|Sequence input| F["🧠 Bidirectional LSTM<br/>BiLSTM → Dropout → BiLSTM → Dense<br/>50-class softmax output"]
-    F -->|Per-frame prediction| G["🗳️ Vote-Based Confirmation<br/>4 of 6 frame agreement"]
-    G -->|Confirmed word| H["✍️ Groq LLaMA 3.1<br/>ISL gloss → Natural sentence"]
-    H -->|Final sentence| I(["🔊 gTTS Speech Output<br/>EN · HI · BN · TA · TE · MR · GU"])
+graph TD
+    A(["🤟 ISL Signer"]) -->|webcam feed| B["📷 OpenCV · 30 fps"]
+    B -->|raw frames| C["🦴 MediaPipe Holistic<br/>Pose · Face · Hands → 378 dims / frame"]
+    C -->|30-frame sequence| D["🧠 Bidirectional LSTM<br/>BiLSTM → Dropout → Dense → 50-class softmax"]
+    D -->|per-frame prediction| E["🗳️ Vote Confirmation<br/>4 of 6 frames agreement"]
+    E -->|confirmed word| F["✍️ Groq LLaMA 3.1<br/>ISL gloss → natural sentence"]
+    F -->|final sentence| G(["🔊 gTTS · EN · HI · BN · TA · TE · MR · GU"])
 ```
 
 ---
