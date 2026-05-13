@@ -276,11 +276,9 @@ The new model is saved automatically to `models/isl_model_solo.keras`.
 
 ## 📦 Dataset
 
-This project uses the **INCLUDE** dataset — a large-scale Indian Sign Language dataset containing 4,292 short video clips across 263 word signs in 15 categories, recorded by experienced ISL practitioners.
+The active model is trained entirely on **personally recorded ISL gesture data** — 30 sequences per word class, recorded via webcam and augmented to expand the dataset.
 
-- 📥 Download: [Zenodo — INCLUDE Dataset](https://zenodo.org/record/4010759)
-- The raw dataset is **not included** in this repository (55 GB)
-- Only the `extracted_features/` folder structure (label names) is tracked on GitHub
+The **[INCLUDE dataset](https://zenodo.org/record/4010759)** (4,292 clips, 263 word signs, IIT Bombay) was used as a reference to select the 50 word classes covered by this project. It is not used for training and is not required to run the project.
 
 ---
 
