@@ -236,14 +236,14 @@ The new model is saved automatically to `models/isl_model_solo.keras`.
 
 The active model is trained entirely on **personally recorded ISL gesture data** — 30 sequences per word class, recorded via webcam and augmented to expand the dataset.
 
-The **[INCLUDE dataset](https://zenodo.org/record/4010759)** (4,292 clips, 263 word signs, IIT Bombay) was used as a reference to select the 50 word classes covered by this project. It is not used for training and is not required to run the project.
+The **[INCLUDE dataset](https://zenodo.org/record/4010759)** (4,292 clips, 263 word signs, IIT Madras · AI4Bharat) was used as a reference to select the 50 word classes covered by this project. It is not used for training and is not required to run the project.
 
 ---
 
 
 ## 🙏 Acknowledgements
 
-- [INCLUDE Dataset](https://zenodo.org/record/4010759) — Indian Sign Language dataset by IIT Bombay
+- [INCLUDE Dataset](https://zenodo.org/record/4010759) — Indian Sign Language dataset by IIT Madras · AI4Bharat
 - [MediaPipe](https://mediapipe.dev) — Holistic landmark extraction by Google
 - [Groq](https://groq.com) — LLaMA 3.1 ultra-fast inference for grammar correction
 - [gTTS](https://gtts.readthedocs.io) — Google Text-to-Speech multilingual audio
