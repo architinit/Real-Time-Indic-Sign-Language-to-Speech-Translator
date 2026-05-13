@@ -20,33 +20,9 @@ The system works entirely through a **standard webcam** — no special hardware 
 
 ## 🔄 System Architecture & Pipeline
 
-```mermaid
-flowchart TD
-    A(["🤟 ISL Signer"]):::user
-    B["📷 Webcam Capture\nOpenCV · 30 fps live frames"]:::step
-    C["🦴 MediaPipe Holistic\nLandmark Extraction"]:::step
-    D1["Pose\n33 joints\n132 values"]:::sub
-    D2["Face\n40 keypoints\n120 values"]:::sub
-    D3["Both Hands\n21+21 joints\n126 values"]:::sub
-    E["🔢 Feature Vector\n378 dimensions · per frame"]:::feature
-    F["🧠 Bidirectional LSTM\nInput: 30 frames × 378 features\nBiLSTM→Dropout→BiLSTM→Dense\nOutput: 50-class probabilities"]:::model
-    G["🗳️ Vote-Based Confirmation\nSliding window of 6 predictions\nWord confirmed at 4 / 6 agreement"]:::step
-    H["✍️ Groq LLaMA 3.1\nGrammar Correction\nISL gloss → Natural sentence"]:::ai
-    I(["🔊 gTTS Speech Output\nEN · HI · BN · TA · TE · MR · GU"]):::output
-
-    A --> B --> C
-    C --> D1 & D2 & D3
-    D1 & D2 & D3 --> E
-    E --> F --> G --> H --> I
-
-    classDef user    fill:#FF9933,stroke:#E07B10,color:#fff,font-weight:bold
-    classDef step    fill:#f0f7ff,stroke:#4A90D9,color:#1a1a2e
-    classDef sub     fill:#e8f4e8,stroke:#138808,color:#0a4a0a
-    classDef feature fill:#fff3e0,stroke:#FF9933,color:#7a3a00,font-weight:bold
-    classDef model   fill:#1a1a6e,stroke:#000080,color:#ffffff,font-weight:bold
-    classDef ai      fill:#f3e8ff,stroke:#7c3aed,color:#3b0764
-    classDef output  fill:#138808,stroke:#0a5a05,color:#ffffff,font-weight:bold
-```
+<div align="center">
+  <img src="https://mermaid.ink/img/Zmxvd2NoYXJ0IFRECiAgICBBKFsiSVNMIFNpZ25lciJdKTo6OnVzZXIKICAgIEJbIldlYmNhbSBDYXB0dXJlXG5PcGVuQ1YgwrcgMzAgZnBzIGxpdmUgZnJhbWVzIl06OjpzdGVwCiAgICBDWyJNZWRpYVBpcGUgSG9saXN0aWNcbkxhbmRtYXJrIEV4dHJhY3Rpb24iXTo6OnN0ZXAKICAgIEQxWyJQb3NlXG4zMyBqb2ludHMgwrcgMTMyIHZhbHVlcyJdOjo6c3ViCiAgICBEMlsiRmFjZVxuNDAga2V5cG9pbnRzIMK3IDEyMCB2YWx1ZXMiXTo6OnN1YgogICAgRDNbIkJvdGggSGFuZHNcbjIxKzIxIGpvaW50cyDCtyAxMjYgdmFsdWVzIl06OjpzdWIKICAgIEVbIkZlYXR1cmUgVmVjdG9yXG4zNzggZGltZW5zaW9ucyDCtyBwZXIgZnJhbWUiXTo6OmZlYXR1cmUKICAgIEZbIkJpZGlyZWN0aW9uYWwgTFNUTVxuSW5wdXQ6IDMwIGZyYW1lcyB4IDM3OCBmZWF0dXJlc1xuQmlMU1RNLURyb3BvdXQtQmlMU1RNLURlbnNlXG5PdXRwdXQ6IDUwLWNsYXNzIHByb2JhYmlsaXRpZXMiXTo6Om1vZGVsCiAgICBHWyJWb3RlLUJhc2VkIENvbmZpcm1hdGlvblxuU2xpZGluZyB3aW5kb3cgb2YgNiBwcmVkaWN0aW9uc1xuV29yZCBjb25maXJtZWQgYXQgNC82IGFncmVlbWVudCJdOjo6c3RlcAogICAgSFsiR3JvcSBMTGFNQSAzLjFcbkdyYW1tYXIgQ29ycmVjdGlvblxuSVNMIGdsb3NzIHRvIE5hdHVyYWwgc2VudGVuY2UiXTo6OmFpCiAgICBJKFsiZ1RUUyBTcGVlY2ggT3V0cHV0XG5FTiDCtyBISSDCtyBCTiDCtyBUQSDCtyBURSDCtyBNUiDCtyBHVSJdKTo6Om91dHB1dAoKICAgIEEgLS0+IEIgLS0+IEMKICAgIEMgLS0+IEQxICYgRDIgJiBEMwogICAgRDEgJiBEMiAmIEQzIC0tPiBFCiAgICBFIC0tPiBGIC0tPiBHIC0tPiBIIC0tPiBJCgogICAgY2xhc3NEZWYgdXNlciAgICBmaWxsOiNGRjk5MzMsc3Ryb2tlOiNFMDdCMTAsY29sb3I6I2ZmZixmb250LXdlaWdodDpib2xkCiAgICBjbGFzc0RlZiBzdGVwICAgIGZpbGw6I2YwZjdmZixzdHJva2U6IzRBOTBEOSxjb2xvcjojMWExYTJlCiAgICBjbGFzc0RlZiBzdWIgICAgIGZpbGw6I2U4ZjRlOCxzdHJva2U6IzEzODgwOCxjb2xvcjojMGE0YTBhCiAgICBjbGFzc0RlZiBmZWF0dXJlIGZpbGw6I2ZmZjNlMCxzdHJva2U6I0ZGOTkzMyxjb2xvcjojN2EzYTAwLGZvbnQtd2VpZ2h0OmJvbGQKICAgIGNsYXNzRGVmIG1vZGVsICAgZmlsbDojMWExYTZlLHN0cm9rZTojMDAwMDgwLGNvbG9yOiNmZmZmZmYsZm9udC13ZWlnaHQ6Ym9sZAogICAgY2xhc3NEZWYgYWkgICAgICBmaWxsOiNmM2U4ZmYsc3Ryb2tlOiM3YzNhZWQsY29sb3I6IzNiMDc2NAogICAgY2xhc3NEZWYgb3V0cHV0ICBmaWxsOiMxMzg4MDgsc3Ryb2tlOiMwYTVhMDUsY29sb3I6I2ZmZmZmZixmb250LXdlaWdodDpib2xk" alt="System Architecture Pipeline" width="800" />
+</div>
 
 ---
 
