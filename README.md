@@ -20,71 +20,32 @@ The system works entirely through a **standard webcam** — no special hardware 
 
 ## 🔄 System Architecture & Pipeline
 
-```
-+------------------------------------------------------------------+
-|                      USER  (ISL Signer)                          |
-+------------------------------------------------------------------+
-                              |
-                              |  performs sign gesture
-                              v
-+------------------------------------------------------------------+
-|                      WEBCAM  (OpenCV)                            |
-|              Captures live video at up to 30 fps                 |
-+------------------------------------------------------------------+
-                              |
-                              |  raw video frames
-                              v
-+------------------------------------------------------------------+
-|                    MEDIAPIPE HOLISTIC                            |
-|                                                                  |
-|   [ Pose: 33 joints ]  [ Face: 40 keypoints ]  [ 2x Hands ]    |
-|       132 values            120 values         63 + 63 values   |
-|                                                                  |
-|            concatenated  =>  378 features / frame               |
-+------------------------------------------------------------------+
-                              |
-                              |  30-frame buffer (~1 second)
-                              v
-+------------------------------------------------------------------+
-|                  BIDIRECTIONAL LSTM MODEL                        |
-|                                                                  |
-|   Input  : (30 frames x 378 features)                           |
-|   Layer 1: BiLSTM(128, return_sequences=True)                   |
-|   Layer 2: Dropout(0.3)                                         |
-|   Layer 3: BiLSTM(64)                                           |
-|   Layer 4: Dense(64, relu)                                      |
-|   Output : Dense(50, softmax)  =>  50-class probabilities       |
-+------------------------------------------------------------------+
-                              |
-                              |  top predicted class + confidence
-                              v
-+------------------------------------------------------------------+
-|                   VOTE-BASED CONFIRMATION                        |
-|                                                                  |
-|   Sliding window of 6 predictions                               |
-|   Word confirmed only when same class appears >= 4 times        |
-|   Eliminates false positives during hand transitions            |
-+------------------------------------------------------------------+
-                              |
-                              |  confirmed word added to sentence
-                              v
-+------------------------------------------------------------------+
-|                GROQ LLaMA 3.1 - GRAMMAR CORRECTION              |
-|                                                                  |
-|   ISL gloss :  "I Doctor Hospital"                              |
-|   Output    :  "I am a Doctor in the Hospital."                 |
-|   Fallback  :  Rule-based linking verb engine (offline)         |
-+------------------------------------------------------------------+
-                              |
-                              |  grammatically correct sentence
-                              v
-+------------------------------------------------------------------+
-|                 gTTS  MULTILINGUAL SPEECH OUTPUT                 |
-|                                                                  |
-|   Translates to chosen language via Google Translate            |
-|   Speaks aloud via gTTS + pygame                                |
-|   Languages: EN  HI  BN  TA  TE  MR  GU                        |
-+------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    A(["🤟 ISL Signer"]):::user
+    B["📷 Webcam Capture\nOpenCV · 30 fps live frames"]:::step
+    C["🦴 MediaPipe Holistic\nLandmark Extraction"]:::step
+    D1["Pose\n33 joints\n132 values"]:::sub
+    D2["Face\n40 keypoints\n120 values"]:::sub
+    D3["Both Hands\n21+21 joints\n126 values"]:::sub
+    E["🔢 Feature Vector\n378 dimensions · per frame"]:::feature
+    F["🧠 Bidirectional LSTM\nInput: 30 frames × 378 features\nBiLSTM→Dropout→BiLSTM→Dense\nOutput: 50-class probabilities"]:::model
+    G["🗳️ Vote-Based Confirmation\nSliding window of 6 predictions\nWord confirmed at 4 / 6 agreement"]:::step
+    H["✍️ Groq LLaMA 3.1\nGrammar Correction\nISL gloss → Natural sentence"]:::ai
+    I(["🔊 gTTS Speech Output\nEN · HI · BN · TA · TE · MR · GU"]):::output
+
+    A --> B --> C
+    C --> D1 & D2 & D3
+    D1 & D2 & D3 --> E
+    E --> F --> G --> H --> I
+
+    classDef user    fill:#FF9933,stroke:#E07B10,color:#fff,font-weight:bold
+    classDef step    fill:#f0f7ff,stroke:#4A90D9,color:#1a1a2e
+    classDef sub     fill:#e8f4e8,stroke:#138808,color:#0a4a0a
+    classDef feature fill:#fff3e0,stroke:#FF9933,color:#7a3a00,font-weight:bold
+    classDef model   fill:#1a1a6e,stroke:#000080,color:#ffffff,font-weight:bold
+    classDef ai      fill:#f3e8ff,stroke:#7c3aed,color:#3b0764
+    classDef output  fill:#138808,stroke:#0a5a05,color:#ffffff,font-weight:bold
 ```
 
 ---
