@@ -21,7 +21,7 @@ The system works entirely through a **standard webcam** — no special hardware 
 ## 🔄 System Architecture & Pipeline
 
 ```mermaid
-graph TD
+graph LR
     A(["🤟 ISL Signer"]) -->|Live webcam feed| B["📷 Webcam Capture<br/>(OpenCV · 30 fps)"]
     B -->|Raw frames| C["🦴 MediaPipe Holistic<br/>Landmark Extraction"]
     C -->|132 values| D1["Pose<br/>33 joints"]
