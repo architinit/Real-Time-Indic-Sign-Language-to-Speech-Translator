@@ -28,21 +28,22 @@ import mediapipe as mp
 import numpy as np
 import pygame
 from deep_translator import GoogleTranslator
-import requests as _req
 from gtts import gTTS
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python import vision as mv
 from tensorflow.keras.models import load_model
 
-# ── College LLM API ───────────────────────────────────────────────────────────
+# ── Groq API ──────────────────────────────────────────────────────────────────
 import os
 try:
-    from dotenv import load_dotenv; load_dotenv()
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 except ImportError:
     pass
-COLLEGE_LLM_KEY      = os.environ.get("COLLEGE_LLM_KEY", "")
-COLLEGE_LLM_ENDPOINT = "https://ai-services.mietjmu.in/gateway/llm/chat"
-COLLEGE_LLM_MODEL    = "qwen3:latest"
+GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL    = "llama-3.1-8b-instant"
+from groq import Groq as _Groq
+_groq_client  = _Groq(api_key=GROQ_API_KEY)
 
 # Multi-word ISL signs that must never be grammatically modified
 FIXED_PHRASES = {"Good Morning", "How are you", "Thank you", "Hello"}
@@ -59,9 +60,9 @@ def enhance_grammar(words: list[str]) -> str:
 
     fallback = " ".join(inject_grammar(words)) + "."
     try:
-        payload = {
-            "model": COLLEGE_LLM_MODEL,
-            "messages": [
+        response = _groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
                 {"role": "system", "content": (
                     "You convert Indian Sign Language (ISL) gloss word sequences into natural English sentences. "
                     "STRICT RULES — follow exactly:\n"
@@ -89,20 +90,16 @@ def enhance_grammar(words: list[str]) -> str:
                 {"role": "assistant", "content": "Thank you."},
                 {"role": "user",      "content": f"Gloss words: {joined}"},
             ],
-            "temperature": 0.1,
-            "max_tokens": 60,
-        }
-        resp = _req.post(
-            COLLEGE_LLM_ENDPOINT,
-            headers={"Authorization": f"Bearer {COLLEGE_LLM_KEY}", "Content-Type": "application/json"},
-            json=payload, timeout=10,
+            temperature=0.1,
+            max_tokens=60,
         )
-        result = resp.json()["data"]["response"].strip()
+        result = response.choices[0].message.content.strip()
         if not result.endswith("."):
             result += "."
+        print(f"  [Groq]  →  {result}")
         return result
     except Exception as e:
-        print(f"  [LLM] {e} — using rule-based fallback")
+        print(f"  [Groq] {e} — using rule-based fallback  →  {fallback}")
         return fallback
 
 
@@ -350,6 +347,8 @@ def run(camera_index: int = 0) -> None:
     top_vote_count     = 0
     low_conf_streak    = 0
     lang_key           = DEFAULT_LANG_KEY   # current output language
+    grammar_result_q: queue.Queue = queue.Queue()  # background grammar results
+    finalizing       = False                        # block new words during API call
 
     with build_holistic() as holistic:
         while True:
@@ -381,17 +380,33 @@ def run(camera_index: int = 0) -> None:
                 if now - last_hand_time > 0.5:
                     sequence.clear()
 
+            # ── Pick up completed grammar results from background thread ──
+            try:
+                _res, _lang_name, _lang_code = grammar_result_q.get_nowait()
+                completed_sentence = _res
+                completed_until    = float("inf")
+                sentence_words     = []
+                finalizing         = False
+                print(f"\nSentence: {_res}  [{_lang_name}]")
+                speak(_res, _lang_code)
+            except queue.Empty:
+                pass
+
             # ── Finalize sentence (shared helper) ────────────────────
             def _finalize():
-                nonlocal completed_sentence, completed_until, sentence_words
-                completed_sentence = enhance_grammar(sentence_words)
-                completed_until    = float("inf")   # stays until C is pressed
-                lang_name, lang_code = LANGUAGES[lang_key]
-                print(f"\nSentence: {completed_sentence}  [{lang_name}]")
-                speak(completed_sentence, lang_code)
-                sentence_words = []
+                nonlocal finalizing
+                if finalizing:
+                    return
+                finalizing     = True
+                words_snapshot = list(sentence_words)
+                _lk            = lang_key
                 sequence.clear()
                 vote_window.clear()
+                def _run():
+                    result = enhance_grammar(words_snapshot)
+                    lang_name, lang_code = LANGUAGES[_lk]
+                    grammar_result_q.put((result, lang_name, lang_code))
+                threading.Thread(target=_run, daemon=True).start()
 
             # ── Finalize sentence on timeout ──────────────────────────
             if (sentence_words and

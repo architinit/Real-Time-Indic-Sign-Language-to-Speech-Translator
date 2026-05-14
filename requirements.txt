@@ -4,6 +4,7 @@ opencv-python>=4.9
 mediapipe>=0.10
 numpy>=1.26
 tensorflow>=2.16
+groq>=0.9
 gtts>=2.5
 pygame>=2.5
 deep-translator>=1.11
