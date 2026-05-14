@@ -28,22 +28,21 @@ import mediapipe as mp
 import numpy as np
 import pygame
 from deep_translator import GoogleTranslator
-from groq import Groq
+import requests as _req
 from gtts import gTTS
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python import vision as mv
 from tensorflow.keras.models import load_model
 
-# ── Groq API ──────────────────────────────────────────────────────────────────
+# ── College LLM API ───────────────────────────────────────────────────────────
 import os
 try:
     from dotenv import load_dotenv; load_dotenv()
 except ImportError:
     pass
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL   = "llama-3.1-8b-instant"
-
-_groq_client = Groq(api_key=GROQ_API_KEY)
+COLLEGE_LLM_KEY      = os.environ.get("COLLEGE_LLM_KEY", "")
+COLLEGE_LLM_ENDPOINT = "https://ai-services.mietjmu.in/gateway/llm/chat"
+COLLEGE_LLM_MODEL    = "qwen3:latest"
 
 # Multi-word ISL signs that must never be grammatically modified
 FIXED_PHRASES = {"Good Morning", "How are you", "Thank you", "Hello"}
@@ -60,23 +59,20 @@ def enhance_grammar(words: list[str]) -> str:
 
     fallback = " ".join(inject_grammar(words)) + "."
     try:
-        response = _groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You convert Indian Sign Language (ISL) gloss word sequences into natural English sentences. "
-                        "STRICT RULES — follow exactly:\n"
-                        "(1) Keep the original word order. Never reorder words.\n"
-                        "(2) Only add linking words (am/is/are/a/an/in/the) if WITHOUT them the sentence makes no "
-                        "grammatical sense. If the words already form a meaningful phrase, output them as-is.\n"
-                        "(3) NEVER add linking words inside fixed greetings or multi-word phrases like "
-                        "'Good Morning', 'How are you', 'Thank you', 'Hello'.\n"
-                        "(4) Do NOT add any new nouns, verbs, or content words not present in the input.\n"
-                        "(5) Reply with the final sentence only — no explanation, no quotes."
-                    ),
-                },
+        payload = {
+            "model": COLLEGE_LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": (
+                    "You convert Indian Sign Language (ISL) gloss word sequences into natural English sentences. "
+                    "STRICT RULES — follow exactly:\n"
+                    "(1) Keep the original word order. Never reorder words.\n"
+                    "(2) Only add linking words (am/is/are/a/an/in/the) if WITHOUT them the sentence makes no "
+                    "grammatical sense. If the words already form a meaningful phrase, output them as-is.\n"
+                    "(3) NEVER add linking words inside fixed greetings or multi-word phrases like "
+                    "'Good Morning', 'How are you', 'Thank you', 'Hello'.\n"
+                    "(4) Do NOT add any new nouns, verbs, or content words not present in the input.\n"
+                    "(5) Reply with the final sentence only — no explanation, no quotes."
+                )},
                 {"role": "user",      "content": "Gloss words: I Teacher"},
                 {"role": "assistant", "content": "I am a Teacher."},
                 {"role": "user",      "content": "Gloss words: he Doctor"},
@@ -93,15 +89,20 @@ def enhance_grammar(words: list[str]) -> str:
                 {"role": "assistant", "content": "Thank you."},
                 {"role": "user",      "content": f"Gloss words: {joined}"},
             ],
-            temperature=0.1,
-            max_tokens=60,
+            "temperature": 0.1,
+            "max_tokens": 60,
+        }
+        resp = _req.post(
+            COLLEGE_LLM_ENDPOINT,
+            headers={"Authorization": f"Bearer {COLLEGE_LLM_KEY}", "Content-Type": "application/json"},
+            json=payload, timeout=10,
         )
-        result = response.choices[0].message.content.strip()
+        result = resp.json()["data"]["response"].strip()
         if not result.endswith("."):
             result += "."
         return result
     except Exception as e:
-        print(f"  [Groq] {e} — using rule-based fallback")
+        print(f"  [LLM] {e} — using rule-based fallback")
         return fallback
 
 

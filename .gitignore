@@ -32,7 +32,9 @@ evaluation_charts/
 
 # Env / secrets
 .env
-.env.*
+.env.local
+.env.production
+!.env.example
 
 # Claude Code internals
 .claude/

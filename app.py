@@ -138,11 +138,11 @@ def enhance_grammar(words):
     # by passing it through but adding a strong hint to the LLM
     fallback = " ".join(inject_grammar(words)) + "."
     try:
-        from groq import Groq
-        client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
+        import requests as _req
+        api_key = os.environ.get("COLLEGE_LLM_KEY", "")
+        payload = {
+            "model": "qwen3:latest",
+            "messages": [
                 {"role": "system", "content": (
                     "You convert Indian Sign Language (ISL) gloss word sequences into natural English sentences. "
                     "STRICT RULES — follow exactly:\n"
@@ -168,13 +168,18 @@ def enhance_grammar(words):
                 {"role": "assistant", "content": "Thank you."},
                 {"role": "user",      "content": f"Gloss words: {' '.join(words)}"},
             ],
-            temperature=0.1, max_tokens=60,
+            "temperature": 0.1, "max_tokens": 60,
+        }
+        resp = _req.post(
+            "https://ai-services.mietjmu.in/gateway/llm/chat",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload, timeout=10,
         )
-        result = response.choices[0].message.content.strip()
+        result = resp.json()["data"]["response"].strip()
         if not result.endswith("."): result += "."
         return result
     except Exception as e:
-        print(f"  [Groq] {e} — using rule-based fallback")
+        print(f"  [LLM] {e} — using rule-based fallback")
         return fallback
 
 
