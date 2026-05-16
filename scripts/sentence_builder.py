@@ -35,11 +35,12 @@ from tensorflow.keras.models import load_model
 
 # ── Groq API ──────────────────────────────────────────────────────────────────
 import os
-try:
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-except ImportError:
-    pass
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        if "=" in _line and not _line.startswith("#"):
+            _k, _v = _line.split("=", 1)
+            os.environ[_k.strip()] = _v.strip()
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL    = "llama-3.1-8b-instant"
 from groq import Groq as _Groq
@@ -347,8 +348,6 @@ def run(camera_index: int = 0) -> None:
     top_vote_count     = 0
     low_conf_streak    = 0
     lang_key           = DEFAULT_LANG_KEY   # current output language
-    grammar_result_q: queue.Queue = queue.Queue()  # background grammar results
-    finalizing       = False                        # block new words during API call
 
     with build_holistic() as holistic:
         while True:
@@ -369,6 +368,36 @@ def run(camera_index: int = 0) -> None:
                 result.left_hand_landmarks or result.right_hand_landmarks
             )
 
+            # ── Draw landmarks overlay ────────────────────────────────
+            DRAW_LANDMARKS = True   # set False to hide overlay
+            if DRAW_LANDMARKS:
+                h_img, w_img = frame.shape[:2]
+                def _draw_connections(frame, landmarks, connections, color, radius=2):
+                    pts = [(int(lm.x * w_img), int(lm.y * h_img)) for lm in landmarks]
+                    for a, b in connections:
+                        cv2.line(frame, pts[a], pts[b], color, 1)
+                    for pt in pts:
+                        cv2.circle(frame, pt, radius, color, -1)
+
+                HAND_CONNECTIONS = [
+                    (0,1),(1,2),(2,3),(3,4),
+                    (0,5),(5,6),(6,7),(7,8),
+                    (0,9),(9,10),(10,11),(11,12),
+                    (0,13),(13,14),(14,15),(15,16),
+                    (0,17),(17,18),(18,19),(19,20),
+                    (5,9),(9,13),(13,17),
+                ]
+                POSE_CONNECTIONS = [
+                    (11,12),(11,13),(13,15),(12,14),(14,16),
+                    (11,23),(12,24),(23,24),(23,25),(24,26),
+                ]
+                if result.left_hand_landmarks:
+                    _draw_connections(frame, result.left_hand_landmarks, HAND_CONNECTIONS, (0,255,0))
+                if result.right_hand_landmarks:
+                    _draw_connections(frame, result.right_hand_landmarks, HAND_CONNECTIONS, (0,255,0))
+                if result.pose_landmarks:
+                    _draw_connections(frame, result.pose_landmarks, POSE_CONNECTIONS, (255,100,0))
+
             # ── Buffer management ─────────────────────────────────────
             if hands_present:
                 last_hand_time = now
@@ -380,33 +409,17 @@ def run(camera_index: int = 0) -> None:
                 if now - last_hand_time > 0.5:
                     sequence.clear()
 
-            # ── Pick up completed grammar results from background thread ──
-            try:
-                _res, _lang_name, _lang_code = grammar_result_q.get_nowait()
-                completed_sentence = _res
-                completed_until    = float("inf")
-                sentence_words     = []
-                finalizing         = False
-                print(f"\nSentence: {_res}  [{_lang_name}]")
-                speak(_res, _lang_code)
-            except queue.Empty:
-                pass
-
             # ── Finalize sentence (shared helper) ────────────────────
             def _finalize():
-                nonlocal finalizing
-                if finalizing:
-                    return
-                finalizing     = True
-                words_snapshot = list(sentence_words)
-                _lk            = lang_key
+                nonlocal completed_sentence, completed_until, sentence_words
+                completed_sentence = enhance_grammar(sentence_words)
+                completed_until    = float("inf")
+                lang_name, lang_code = LANGUAGES[lang_key]
+                print(f"\nSentence: {completed_sentence}  [{lang_name}]")
+                speak(completed_sentence, lang_code)
+                sentence_words = []
                 sequence.clear()
                 vote_window.clear()
-                def _run():
-                    result = enhance_grammar(words_snapshot)
-                    lang_name, lang_code = LANGUAGES[_lk]
-                    grammar_result_q.put((result, lang_name, lang_code))
-                threading.Thread(target=_run, daemon=True).start()
 
             # ── Finalize sentence on timeout ──────────────────────────
             if (sentence_words and

@@ -290,3 +290,38 @@ function changeLanguage() {
   const sel = document.getElementById('langSelect');
   if (sel) sendControl('language', { lang: sel.value });
 }
+
+// ── KEYBOARD SHORTCUTS ──
+const LANG_KEYS = { '1':'en', '2':'hi', '3':'bn', '4':'ta', '5':'te', '6':'mr', '7':'gu' };
+
+document.addEventListener('keydown', (e) => {
+  // Don't trigger if user is typing in an input/select
+  if (['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+  switch (e.key) {
+    case 'Enter':
+      e.preventDefault();
+      finalizeSentence();
+      break;
+    case 'b':
+    case 'B':
+      undoWord();
+      break;
+    case 'c':
+    case 'C':
+      clearSentence();
+      break;
+    case 's':
+    case 'S':
+      speakOutput();
+      break;
+    default:
+      if (LANG_KEYS[e.key]) {
+        const sel = document.getElementById('langSelect');
+        if (sel) {
+          sel.value = LANG_KEYS[e.key];
+          changeLanguage();
+        }
+      }
+  }
+});

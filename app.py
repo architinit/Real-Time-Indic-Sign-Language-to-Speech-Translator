@@ -388,6 +388,34 @@ def _camera_loop(camera_index=0):
 
         hands_present = bool(result.left_hand_landmarks or result.right_hand_landmarks)
 
+        # ── Draw landmarks overlay ────────────────────────────────────
+        DRAW_LANDMARKS = True   # set False to hide overlay
+        if DRAW_LANDMARKS:
+            def _draw_connections(frm, landmarks, connections, color, radius=2):
+                pts = [(int(lm.x * w), int(lm.y * h)) for lm in landmarks]
+                for a, b in connections:
+                    cv2.line(frm, pts[a], pts[b], color, 1)
+                for pt in pts:
+                    cv2.circle(frm, pt, radius, color, -1)
+            HAND_CONNECTIONS = [
+                (0,1),(1,2),(2,3),(3,4),
+                (0,5),(5,6),(6,7),(7,8),
+                (0,9),(9,10),(10,11),(11,12),
+                (0,13),(13,14),(14,15),(15,16),
+                (0,17),(17,18),(18,19),(19,20),
+                (5,9),(9,13),(13,17),
+            ]
+            POSE_CONNECTIONS = [
+                (11,12),(11,13),(13,15),(12,14),(14,16),
+                (11,23),(12,24),(23,24),(23,25),(24,26),
+            ]
+            if result.left_hand_landmarks:
+                _draw_connections(frame, result.left_hand_landmarks, HAND_CONNECTIONS, (0,255,0))
+            if result.right_hand_landmarks:
+                _draw_connections(frame, result.right_hand_landmarks, HAND_CONNECTIONS, (0,255,0))
+            if result.pose_landmarks:
+                _draw_connections(frame, result.pose_landmarks, POSE_CONNECTIONS, (255,100,0))
+
         if hands_present:
             last_hand_t = now
             sequence.append(extract_keypoints(result))
